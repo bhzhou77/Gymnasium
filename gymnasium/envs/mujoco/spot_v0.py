@@ -153,7 +153,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        xml_file: str = "spot.xml",
+        xml_file: str = "spot_scene.xml",
         frame_skip: int = 5,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
         forward_reward_weight: float = 1.0,
