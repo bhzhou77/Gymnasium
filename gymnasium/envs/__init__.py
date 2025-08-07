@@ -194,6 +194,13 @@ def _raise_mujoco_py_error(*args: Any, **kwargs: Any):
 # manipulation
 
 
+register(
+    id="Spot-v0",
+    entry_point="gymnasium.envs.mujoco.spot_v0:SpotEnv",
+    max_episode_steps=1000,
+    reward_threshold=4800.0,
+)
+
 register(id="Reacher-v2", entry_point=_raise_mujoco_py_error)
 
 register(
