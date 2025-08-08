@@ -11,33 +11,6 @@ DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
-"""
-'fl_hip': 0,
-            'fl_uleg': 1,
-            'fl_lleg': 2,
-            'fl_foot': 3,
-            'fr_hip': 4,
-            'fr_uleg': 5,
-            'fr_lleg': 6,
-            'fr_foot': 7,
-            'hl_hip': 8,
-            'hl_uleg': 9,
-            'hl_lleg': 10,
-            'hl_foot': 11,
-            'hr_hip': 12,
-            'hr_uleg': 13,
-            'hr_lleg': 14,
-            'hr_foot': 15,
-
-'fl_hx', 'fl_hy', 'fl_kn', 'fr_hx', 'fr_hy', 'fr_kn', 'freejoint', 'hl_hx', 'hl_hy', 'hl_kn', 'hr_hx', 'hr_hy', 'hr_kn'
-
-[ 0.785398  2.29511  -0.254402  0.785398  2.24363  -0.255648  0.785398
-  2.29511  -0.247067  0.785398  2.29511  -0.248282]
-[-0.785398 -0.898845 -2.7929   -0.785398 -0.898845 -2.7929   -0.785398
- -0.898845 -2.7929   -0.785398 -0.898845 -2.7929  ]
-"""
-
-
 class SpotEnv(MujocoEnv, utils.EzPickle):
     r"""
     ## Description
