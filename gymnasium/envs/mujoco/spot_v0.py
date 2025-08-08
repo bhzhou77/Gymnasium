@@ -24,7 +24,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     :name: spotanatomy
     ```
 
-    The action space is a `Box(low, high, (12,), float32)`. An action represents the angle values applied at the hinge joints.
+    The action space is a `Box(low, high, (12,))`. An action represents the angle values applied at the hinge joints.
 
     | Num | Action                                            | Control Min | Control Max | Name (in corresponding XML file) | Joint | Type (Unit) |
     | --- | ------------------------------------------------- | ----------- | ----------- | -------------------------------- | ----- | ----------- |
@@ -45,15 +45,15 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     ## Observation Space
     The observation space consists of the following parts (in order):
 
-    - *qpos (18 elements by default):* The first two are the y and z coordinates of the body, the next four are the quaternion of the free joints. The rest are the angular values of the robot's joints.
+    - *qpos (18 elements by default):* The first two are the y and z coordinates of the body, the next four are the quaternion of the free joint. The rest are the angular values of the robot's joints.
     - *qvel (18 elements):* The velocities of qpos (their derivatives).
 
     By default, the observation does not include the robot's x-coordinate.
     This can be included by passing `exclude_current_positions_from_observation=False` during construction.
-    In this case, the observation space will be a `Box(-Inf, Inf, (37,), float64)`, where the first observation element is the x-coordinate of the robot.
+    In this case, the observation space will be a `Box(-Inf, Inf, (37,))`, where the first observation element is the x-coordinate of the robot.
     Regardless of whether `exclude_current_positions_from_observation` is set to `True` or `False`, the x- and y-coordinates are returned in `info` with the keys `"x_position"` and `"y_position"`, respectively.
 
-    By default, however, the observation space is a `Box(-Inf, Inf, (36,), float64)` where the elements are as follows:
+    By default, however, the observation space is a `Box(-Inf, Inf, (36,))` where the elements are as follows:
 
 
     TO BE DETERMINED.
@@ -67,8 +67,8 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     this reward would be positive if the Spot moves forward (in the positive $x$ direction / in the right direction).
     $w_{forward} \times \frac{dx}{dt}$, where
     $dx$ is the displacement of the "tip" ($x_{after-action} - x_{before-action}$),
-    $dt$ is the time between actions, which depends on the `frame_skip` parameter (default is $5$),
-    and `frametime` which is $0.01$ - so the default is $dt = 5 \times 0.01 = 0.05$,
+    $dt$ is the time between actions, which depends on the `frame_skip` parameter (default is $10$),
+    and `frametime` which is $0.002$ - so the default is $dt = 10 \times 0.002 = 0.02$,
     $w_{forward}$ is the `forward_reward_weight` (default is $1$).
     - *ctrl_cost*:
     A negative reward to penalize the Spot for taking actions that are too large.
@@ -139,7 +139,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     def __init__(
         self,
         xml_file: str = "spot_scene.xml",
-        frame_skip: int = 5,
+        frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
         forward_reward_weight: float = 1.0,
         ctrl_cost_weight: float = 0.1,
