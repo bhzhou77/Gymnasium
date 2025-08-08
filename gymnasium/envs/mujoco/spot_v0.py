@@ -11,67 +11,79 @@ DEFAULT_CAMERA_CONFIG = {
     "distance": 4.0,
 }
 
+"""
+'fl_hip': 0,
+            'fl_uleg': 1,
+            'fl_lleg': 2,
+            'fl_foot': 3,
+            'fr_hip': 4,
+            'fr_uleg': 5,
+            'fr_lleg': 6,
+            'fr_foot': 7,
+            'hl_hip': 8,
+            'hl_uleg': 9,
+            'hl_lleg': 10,
+            'hl_foot': 11,
+            'hr_hip': 12,
+            'hr_uleg': 13,
+            'hr_lleg': 14,
+            'hr_foot': 15,
+
+'fl_hx', 'fl_hy', 'fl_kn', 'fr_hx', 'fr_hy', 'fr_kn', 'freejoint', 'hl_hx', 'hl_hy', 'hl_kn', 'hr_hx', 'hr_hy', 'hr_kn'
+
+[ 0.785398  2.29511  -0.254402  0.785398  2.24363  -0.255648  0.785398
+  2.29511  -0.247067  0.785398  2.29511  -0.248282]
+[-0.785398 -0.898845 -2.7929   -0.785398 -0.898845 -2.7929   -0.785398
+ -0.898845 -2.7929   -0.785398 -0.898845 -2.7929  ]
+"""
+
 
 class SpotEnv(MujocoEnv, utils.EzPickle):
     r"""
     ## Description
-    This environment is based on the work of P. Wawrzyński in ["A Cat-Like Robot Real-Time Learning to Run"](http://staff.elka.pw.edu.pl/~pwawrzyn/pub-s/0812_LSCLRR.pdf).
-    The HalfCheetah is a 2-dimensional robot consisting of 9 body parts and 8 joints connecting them (including two paws).
-    The goal is to apply torque to the joints to make the cheetah run forward (right) as fast as possible, with a positive reward based on the distance moved forward and a negative reward for moving backward.
-    The cheetah's torso and head are fixed, and torque can only be applied to the other 6 joints over the front and back thighs (which connect to the torso), the shins (which connect to the thighs), and the feet (which connect to the shins).
+    This environment is based on robot dog Spot from Boston Dynamics.
+    The Spot has 16 body parts and 12 joints connecting them (excluding the body piece in the center).
+    The goal is to apply angle values to the joints to make the Spot perform various gaits, such as walk, trot and gallop.
 
 
     ## Action Space
-    ```{figure} action_space_figures/half_cheetah.png
-    :name: half_cheetah
+    ```{figure} action_space_figures/spotanatomy.png
+    :name: spotanatomy
     ```
 
-    The action space is a `Box(-1, 1, (6,), float32)`. An action represents the torques applied at the hinge joints.
+    The action space is a `Box(low, high, (12,), float32)`. An action represents the angle values applied at the hinge joints.
 
-    | Num | Action                                  | Control Min | Control Max | Name (in corresponding XML file) | Joint | Type (Unit)  |
-    | --- | --------------------------------------- | ----------- | ----------- | -------------------------------- | ----- | ------------ |
-    | 0   | Torque applied on the back thigh rotor  | -1          | 1           | bthigh                           | hinge | torque (N m) |
-    | 1   | Torque applied on the back shin rotor   | -1          | 1           | bshin                            | hinge | torque (N m) |
-    | 2   | Torque applied on the back foot rotor   | -1          | 1           | bfoot                            | hinge | torque (N m) |
-    | 3   | Torque applied on the front thigh rotor | -1          | 1           | fthigh                           | hinge | torque (N m) |
-    | 4   | Torque applied on the front shin rotor  | -1          | 1           | fshin                            | hinge | torque (N m) |
-    | 5   | Torque applied on the front foot rotor  | -1          | 1           | ffoot                            | hinge | torque (N m) |
+    | Num | Action                                            | Control Min | Control Max | Name (in corresponding XML file) | Joint | Type (Unit) |
+    | --- | ------------------------------------------------- | ----------- | ----------- | -------------------------------- | ----- | ----------- |
+    | 0   | Angle applied on the front left hip rotor         | -0.785398   | 0.785398    | fl_hx                            | hinge | angle (rad) |
+    | 1   | Angle applied on the front left upper leg rotor   | -0.898845   | 2.29511     | fl_hy                            | hinge | angle (rad) |
+    | 2   | Angle applied on the front left lower leg rotor   | -2.7929     | -0.254402   | fl_kn                            | hinge | angle (rad) |
+    | 3   | Angle applied on the front right hip rotor        | -0.785398   | 0.785398    | fr_hx                            | hinge | angle (rad) |
+    | 4   | Angle applied on the front right upper leg rotor  | -0.898845   | 2.24363     | fr_hy                            | hinge | angle (rad) |
+    | 5   | Angle applied on the front right lower leg rotor  | -2.7929     | -0.255648   | fr_kn                            | hinge | angle (rad) |
+    | 6   | Angle applied on the hind left hip rotor          | -0.785398   | 0.785398    | hl_hx                            | hinge | angle (rad) |
+    | 7   | Angle applied on the hind left upper leg rotor    | -0.898845   | 2.29511     | hl_hy                            | hinge | angle (rad) |
+    | 8   | Angle applied on the hind left lower leg rotor    | -2.7929     | -0.247067   | hl_kn                            | hinge | angle (rad) |
+    | 9   | Angle applied on the hind right hip rotor         | -0.785398   | 0.785398    | hr_hx                            | hinge | angle (rad) |
+    | 10  | Angle applied on the hind right upper leg rotor   | -0.898845   | 2.29511     | hr_hy                            | hinge | angle (rad) |
+    | 11  | Angle applied on the hind right lower leg rotor   | -2.7929     | -0.248282   | hr_kn                            | hinge | angle (rad) |
 
 
     ## Observation Space
     The observation space consists of the following parts (in order):
 
-    - *qpos (8 elements by default):* Position values of the robot's body parts.
-    - *qvel (9 elements):* The velocities of these individual body parts (their derivatives).
+    - *qpos (18 elements by default):* The first two are the y and z coordinates of the body, the next four are the quaternion of the free joints. The rest are the angular values of the robot's joints.
+    - *qvel (18 elements):* The velocities of qpos (their derivatives).
 
-    By default, the observation does not include the robot's x-coordinate (`rootx`).
+    By default, the observation does not include the robot's x-coordinate.
     This can be included by passing `exclude_current_positions_from_observation=False` during construction.
-    In this case, the observation space will be a `Box(-Inf, Inf, (18,), float64)`, where the first observation element is the x-coordinate of the robot.
+    In this case, the observation space will be a `Box(-Inf, Inf, (37,), float64)`, where the first observation element is the x-coordinate of the robot.
     Regardless of whether `exclude_current_positions_from_observation` is set to `True` or `False`, the x- and y-coordinates are returned in `info` with the keys `"x_position"` and `"y_position"`, respectively.
 
-    By default, however, the observation space is a `Box(-Inf, Inf, (17,), float64)` where the elements are as follows:
+    By default, however, the observation space is a `Box(-Inf, Inf, (36,), float64)` where the elements are as follows:
 
 
-    | Num | Observation                                 | Min  | Max | Name (in corresponding XML file) | Joint | Type (Unit)              |
-    | --- | ------------------------------------------- | ---- | --- | -------------------------------- | ----- | ------------------------ |
-    | 0   | z-coordinate of the front tip               | -Inf | Inf | rootz                            | slide | position (m)             |
-    | 1   | angle of the front tip                      | -Inf | Inf | rooty                            | hinge | angle (rad)              |
-    | 2   | angle of the back thigh                     | -Inf | Inf | bthigh                           | hinge | angle (rad)              |
-    | 3   | angle of the back shin                      | -Inf | Inf | bshin                            | hinge | angle (rad)              |
-    | 4   | angle of the back foot                      | -Inf | Inf | bfoot                            | hinge | angle (rad)              |
-    | 5   | angle of the front thigh                    | -Inf | Inf | fthigh                           | hinge | angle (rad)              |
-    | 6   | angle of the front shin                     | -Inf | Inf | fshin                            | hinge | angle (rad)              |
-    | 7   | angle of the front foot                     | -Inf | Inf | ffoot                            | hinge | angle (rad)              |
-    | 8   | velocity of the x-coordinate of front tip   | -Inf | Inf | rootx                            | slide | velocity (m/s)           |
-    | 9   | velocity of the z-coordinate of front tip   | -Inf | Inf | rootz                            | slide | velocity (m/s)           |
-    | 10  | angular velocity of the front tip           | -Inf | Inf | rooty                            | hinge | angular velocity (rad/s) |
-    | 11  | angular velocity of the back thigh          | -Inf | Inf | bthigh                           | hinge | angular velocity (rad/s) |
-    | 12  | angular velocity of the back shin           | -Inf | Inf | bshin                            | hinge | angular velocity (rad/s) |
-    | 13  | angular velocity of the back foot           | -Inf | Inf | bfoot                            | hinge | angular velocity (rad/s) |
-    | 14  | angular velocity of the front thigh         | -Inf | Inf | fthigh                           | hinge | angular velocity (rad/s) |
-    | 15  | angular velocity of the front shin          | -Inf | Inf | fshin                            | hinge | angular velocity (rad/s) |
-    | 16  | angular velocity of the front foot          | -Inf | Inf | ffoot                            | hinge | angular velocity (rad/s) |
-    | excluded | x-coordinate of the front tip          | -Inf | Inf | rootx                            | slide | position (m)             |
+    TO BE DETERMINED.
 
 
     ## Rewards
@@ -79,14 +91,14 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     - *forward_reward*:
     A reward for moving forward,
-    this reward would be positive if the Half Cheetah moves forward (in the positive $x$ direction / in the right direction).
+    this reward would be positive if the Spot moves forward (in the positive $x$ direction / in the right direction).
     $w_{forward} \times \frac{dx}{dt}$, where
     $dx$ is the displacement of the "tip" ($x_{after-action} - x_{before-action}$),
     $dt$ is the time between actions, which depends on the `frame_skip` parameter (default is $5$),
     and `frametime` which is $0.01$ - so the default is $dt = 5 \times 0.01 = 0.05$,
     $w_{forward}$ is the `forward_reward_weight` (default is $1$).
     - *ctrl_cost*:
-    A negative reward to penalize the Half Cheetah for taking actions that are too large.
+    A negative reward to penalize the Spot for taking actions that are too large.
     $w_{control} \times \|action\|_2^2$,
     where $w_{control}$ is `ctrl_cost_weight` (default is $0.1$).
 
@@ -102,24 +114,24 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     ## Episode End
     ### Termination
-    The Half Cheetah never terminates.
+    The Spot never terminates.
 
     ### Truncation
     The default duration of an episode is 1000 timesteps.
 
 
     ## Arguments
-    HalfCheetah provides a range of parameters to modify the observation space, reward function, initial state, and termination condition.
+    Spot provides a range of parameters to modify the observation space, reward function, initial state, and termination condition.
     These parameters can be applied during `gymnasium.make` in the following way:
 
     ```python
     import gymnasium as gym
-    env = gym.make('HalfCheetah-v5', ctrl_cost_weight=0.1, ....)
+    env = gym.make('Spot-v0', ctrl_cost_weight=0.1, ....)
     ```
 
     | Parameter                                    | Type      | Default              | Description                                                                                                                                                                                         |
     | -------------------------------------------- | --------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | `xml_file`                                   | **str**   | `"half_cheetah.xml"` | Path to a MuJoCo model                                                                                                                                                                              |
+    | `xml_file`                                   | **str**   | `"spot_scene.xml"`   | Path to a MuJoCo model                                                                                                                                                                              |
     | `forward_reward_weight`                      | **float** | `1`                  | Weight for _forward_reward_ term (see `Rewards` section)                                                                                                                                            |
     | `ctrl_cost_weight`                           | **float** | `0.1`                | Weight for _ctrl_cost_ weight (see `Rewards` section)                                                                                                                                               |
     | `reset_noise_scale`                          | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see `Starting State` section)                                                                                                       |
