@@ -134,14 +134,14 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         xml_file: str = "spot_scene_v0.xml",
         frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
-        keep_upright_reward_weight: float = 10.0,
-        tracking_lin_vel_reward_weight: float = 1.0,
-        tracking_ang_vel_reward_weight: float = 1.0,
-        upward_orientation_cost_weight: float = -10.0,
-        lin_vel_z_cost_weight: float = -1.0,
-        ang_vel_xy_cost_weight: float = -1.0,
+        keep_upright_reward_weight: float = 5.0,
+        tracking_lin_vel_reward_weight: float = 1.5,
+        tracking_ang_vel_reward_weight: float = 0.8,
+        upward_orientation_cost_weight: float = -5.0,
+        lin_vel_z_cost_weight: float = -2.0,
+        ang_vel_xy_cost_weight: float = -0.05,
         ang_vel_gyro_cost_weight: float = -0.0,
-        action_cost_weight: float = -5.0,
+        action_cost_weight: float = -0.1,
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -215,11 +215,11 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         }
 
     def step(self, action):
-        xy_position_before = self.data.qpos[:2]
-        z_position_before = self.data.qpos[2]
+        xy_position_before = self.data.qpos[:2].copy()
+        z_position_before = self.data.qpos[2].copy()
         self.do_simulation(action, self.frame_skip)
-        xy_position_after = self.data.qpos[:2]
-        z_position_after = self.data.qpos[2]
+        xy_position_after = self.data.qpos[:2].copy()
+        z_position_after = self.data.qpos[2].copy()
 
         tracking_lin_vel = (xy_position_after - xy_position_before) / self.dt
         lin_vel_z = (z_position_after - z_position_before) / self.dt
@@ -263,6 +263,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
                + ang_vel_xy_cost \
                + ang_vel_gyro_cost \
                + action_cost
+        print(reward, keep_upright_reward, tracking_lin_vel_reward)
 
         reward_info = {
             "reward_keep_upright": keep_upright_reward,
