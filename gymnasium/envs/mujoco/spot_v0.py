@@ -60,20 +60,20 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
 
     ## Rewards
-    The total reward is: ***reward*** *=* *forward_reward - ctrl_cost*.
+    The total reward is: ***reward*** *=* *tracking_lin_vel_reward - action_cost*.
 
-    - *forward_reward*:
+    - *tracking_lin_vel_reward*:
     A reward for moving forward,
-    this reward would be positive if the Spot moves forward (in the positive $x$ direction / in the right direction).
+    this reward would be positive if the Spot moves in the xy plane.
     $w_{forward} \times \frac{dx}{dt}$, where
     $dx$ is the displacement of the "tip" ($x_{after-action} - x_{before-action}$),
     $dt$ is the time between actions, which depends on the `frame_skip` parameter (default is $10$),
     and `frametime` which is $0.002$ - so the default is $dt = 10 \times 0.002 = 0.02$,
-    $w_{forward}$ is the `forward_reward_weight` (default is $1$).
-    - *ctrl_cost*:
+    $w_{forward}$ is the `tracking_lin_vel_reward_weight` (default is $1$).
+    - *action_cost*:
     A negative reward to penalize the Spot for taking actions that are too large.
     $w_{control} \times \|action\|_2^2$,
-    where $w_{control}$ is `ctrl_cost_weight` (default is $0.1$).
+    where $w_{control}$ is `action_cost_weight` (default is $0.1$).
 
     `info` contains the individual reward terms.
 
@@ -99,32 +99,25 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     ```python
     import gymnasium as gym
-    env = gym.make('Spot-v0', ctrl_cost_weight=0.1, ....)
+    env = gym.make('Spot-v0', action_cost_weight=0.1, ....)
     ```
 
     | Parameter                                    | Type      | Default              | Description                                                                                                                                                                                         |
     | -------------------------------------------- | --------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
     | `xml_file`                                   | **str**   | `"spot_scene.xml"`   | Path to a MuJoCo model                                                                                                                                                                              |
-    | `forward_reward_weight`                      | **float** | `1`                  | Weight for _forward_reward_ term (see `Rewards` section)                                                                                                                                            |
-    | `ctrl_cost_weight`                           | **float** | `0.1`                | Weight for _ctrl_cost_ weight (see `Rewards` section)                                                                                                                                               |
+    | `tracking_lin_vel_reward_weight`             | **float** | `1`                  | Weight for _tracking_lin_vel_reward_ term (see `Rewards` section)                                                                                                                                   |
+    | `action_cost_weight`                         | **float** | `-0.1`               | Weight for _action_cost_ weight (see `Rewards` section)                                                                                                                                             |
     | `reset_noise_scale`                          | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see `Starting State` section)                                                                                                       |
     | `exclude_current_positions_from_observation` | **bool**  | `True`               | Whether or not to omit the x-coordinate from observations. Excluding the position can serve as an inductive bias to induce position-agnostic behavior in policies (see `Observation State` section) |
 
     ## Version History
-    * v5:
-        - Minimum `mujoco` version is now 2.3.3.
-        - Added support for fully custom/third party `mujoco` models using the `xml_file` argument (previously only a few changes could be made to the existing models).
-        - Added `default_camera_config` argument, a dictionary for setting the `mj_camera` properties, mainly useful for custom environments.
-        - Added `env.observation_structure`, a dictionary for specifying the observation space compose (e.g. `qpos`, `qvel`), useful for building tooling and wrappers for the MuJoCo environments.
-        - Return a non-empty `info` with `reset()`, previously an empty dictionary was returned, the new keys are the same state information as `step()`.
-        - Added `frame_skip` argument, used to configure the `dt` (duration of `step()`), default varies by environment check environment documentation pages.
-        - Restored the `xml_file` argument (was removed in `v4`).
-        - Renamed `info["reward_run"]` to `info["reward_forward"]` to be consistent with the other environments.
-    * v4: All MuJoCo environments now use the MuJoCo bindings in mujoco >= 2.1.3.
-    * v3: Support for `gymnasium.make` kwargs such as `xml_file`, `ctrl_cost_weight`, `reset_noise_scale`, etc. rgb rendering comes from tracking camera (so agent does not run away from screen). Moved to the [gymnasium-robotics repo](https://github.com/Farama-Foundation/gymnasium-robotics).
-    * v2: All continuous control environments now use mujoco-py >= 1.50. Moved to the [gymnasium-robotics repo](https://github.com/Farama-Foundation/gymnasium-robotics).
-    * v1: max_time_steps raised to 1000 for robot based tasks. Added reward_threshold to environments.
-    * v0: Initial versions release.
+    * v0:
+        - Adapted from half_cheetah_v5.
+        - Changed the `.xml` file to the one for the spot.
+        - Changed the frame_skip from 5 to 10.
+        - Put minus signs the the weights for the costs.
+        - Renamed `info["reward_forward"]` to `info["reward_tracking_lin_vel"]`.
+        - Added more rewards and costs.
     """
 
     metadata = {
@@ -138,11 +131,16 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        xml_file: str = "spot_scene.xml",
+        xml_file: str = "spot_scene_v0.xml",
         frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
-        forward_reward_weight: float = 1.0,
-        ctrl_cost_weight: float = 0.1,
+        tracking_lin_vel_reward_weight: float = 1.0,
+        tracking_ang_vel_reward_weight: float = 1.0,
+        upward_orientation_cost_weight: float = -100.0,
+        lin_vel_z_cost_weight: float = -1.0,
+        ang_vel_xy_cost_weight: float = -1.0,
+        ang_vel_gyro_cost_weight: float = -0.0,
+        action_cost_weight: float = -0.1,
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -152,15 +150,25 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             xml_file,
             frame_skip,
             default_camera_config,
-            forward_reward_weight,
-            ctrl_cost_weight,
+            tracking_lin_vel_reward_weight,
+            tracking_ang_vel_reward_weight,
+            upward_orientation_cost_weight,
+            lin_vel_z_cost_weight,
+            ang_vel_xy_cost_weight,
+            ang_vel_gyro_cost_weight,
+            action_cost_weight,
             reset_noise_scale,
             exclude_current_positions_from_observation,
             **kwargs,
         )
 
-        self._forward_reward_weight = forward_reward_weight
-        self._ctrl_cost_weight = ctrl_cost_weight
+        self._tracking_lin_vel_reward_weight = tracking_lin_vel_reward_weight
+        self._tracking_ang_vel_reward_weight = tracking_ang_vel_reward_weight
+        self._upward_orientation_cost_weight = upward_orientation_cost_weight
+        self._lin_vel_z_cost_weight = lin_vel_z_cost_weight
+        self._ang_vel_xy_cost_weight = ang_vel_xy_cost_weight
+        self._ang_vel_gyro_cost_weight = ang_vel_gyro_cost_weight
+        self._action_cost_weight = action_cost_weight
 
         self._reset_noise_scale = reset_noise_scale
 
@@ -203,36 +211,87 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             "qvel": self.data.qvel.size,
         }
 
-    def control_cost(self, action):
-        control_cost = self._ctrl_cost_weight * np.sum(np.square(action))
-        return control_cost
-
     def step(self, action):
-        x_position_before = self.data.qpos[0]
+        xy_position_before = self.data.qpos[:2]
+        z_position_before = self.data.qpos[2]
         self.do_simulation(action, self.frame_skip)
-        x_position_after = self.data.qpos[0]
-        x_velocity = (x_position_after - x_position_before) / self.dt
+        xy_position_after = self.data.qpos[:2]
+        z_position_after = self.data.qpos[2]
+
+        tracking_lin_vel = (xy_position_after - xy_position_before) / self.dt
+        lin_vel_z = (z_position_after - z_position_before) / self.dt
+
+        ang_vel = self.get_global_angvel(self.data)
+        ang_vel_gyro = self.get_gyro(self.data)
+        gravity_vec = self.get_gravity(self.data)
 
         observation = self._get_obs()
-        reward, reward_info = self._get_rew(x_velocity, action)
-        info = {"x_position": x_position_after, "x_velocity": x_velocity, **reward_info}
+        reward, reward_info = self._get_rew(tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action)
+        info = {"xy_position": xy_position_after, 
+                "z_position": z_position_after, 
+                "tracking_lin_vel": tracking_lin_vel,
+                "gravity_vec": gravity_vec,
+                "lin_vel_z": lin_vel_z,
+                "ang_vel": ang_vel,
+                "ang_vel_gyro": ang_vel_gyro,
+                **reward_info
+        }
 
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         return observation, reward, False, False, info
 
-    def _get_rew(self, x_velocity: float, action):
-        forward_reward = self._forward_reward_weight * x_velocity
-        ctrl_cost = self.control_cost(action)
+    def _get_rew(self, tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action):
+        tracking_lin_vel_reward = self._reward_tracking_lin_vel(tracking_lin_vel)
+        tracking_ang_vel_reward = self._reward_tracking_ang_vel(ang_vel_gyro)
+        upward_orientation_cost = self._cost_upward_orientation(gravity_vec)
+        lin_vel_z_cost = self._cost_lin_vel_z(lin_vel_z)
+        ang_vel_xy_cost = self._cost_ang_vel_xy(ang_vel)
+        ang_vel_gyro_cost = self._cost_ang_vel_gyro(ang_vel_gyro)
+        action_cost = self._cost_large_actions(action)
 
-        reward = forward_reward - ctrl_cost
+        reward = tracking_lin_vel_reward \
+                 + tracking_ang_vel_reward \
+                 + upward_orientation_cost \
+                 + lin_vel_z_cost \
+                 + ang_vel_xy_cost \
+                 + ang_vel_gyro_cost \
+                 + action_cost
 
         reward_info = {
-            "reward_forward": forward_reward,
-            "reward_ctrl": -ctrl_cost,
+            "reward_tracking_lin_vel": tracking_lin_vel_reward,
+            "reward_tracking_ang_vel": tracking_ang_vel_reward,
+            "cost_upward_orientation": upward_orientation_cost,
+            "cost_lin_vel_z": lin_vel_z_cost,
+            "cost_ang_vel_xy": ang_vel_xy_cost,
+            "cost_ang_vel_gyro": ang_vel_gyro_cost,
+            "cost_action": action_cost,
         }
         return reward, reward_info
+
+    def _reward_tracking_lin_vel(self, tracking_lin_vel):
+        # movement on the plane
+        return self._tracking_lin_vel_reward_weight * np.linalg.norm(tracking_lin_vel)
+
+    def _reward_tracking_ang_vel(self, ang_vel_gyro):
+        # yaw
+        return self._tracking_ang_vel_reward_weight * np.abs(ang_vel_gyro[2])
+
+    def _cost_upward_orientation(self, gravity_vec):
+        return self._upward_orientation_cost_weight * np.linalg.norm(gravity_vec[:2])
+
+    def _cost_lin_vel_z(self, lin_vel_z):
+        return self._lin_vel_z_cost_weight * np.abs(lin_vel_z)
+
+    def _cost_ang_vel_xy(self, ang_vel):
+        return self._ang_vel_xy_cost_weight * np.linalg.norm(ang_vel[:2])
+
+    def _cost_ang_vel_gyro(self, ang_vel_gyro):
+        return self._ang_vel_gyro_cost_weight * np.linalg.norm(ang_vel_gyro[:2])
+
+    def _cost_large_actions(self, action):
+        return self._action_cost_weight * np.sum(np.square(action))
 
     def _get_obs(self):
         position = self.data.qpos.flatten()
@@ -243,6 +302,54 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
         observation = np.concatenate((position, velocity)).ravel()
         return observation
+
+    # Sensor readings. Adapted from mujoco playground.
+
+    def get_gravity(self, data):
+        """Return the gravity vector in the world frame."""
+        return self.get_sensor_data(self.model, self.data, "upvector")
+
+    def get_global_linvel(self, data):
+        """Return the linear velocity of the robot in the world frame."""
+        return self.get_sensor_data(
+            self.model, self.data, "global_linvel"
+        )
+
+    def get_global_angvel(self, data):
+        """Return the angular velocity of the robot in the world frame."""
+        return self.get_sensor_data(
+            self.model, self.data, "global_angvel"
+        )
+
+    def get_local_linvel(self, data):
+        """Return the linear velocity of the robot in the local frame."""
+        return self.get_sensor_data(
+            self.model, self.data, "local_linvel"
+        )
+
+    def get_accelerometer(self, data):
+        """Return the accelerometer readings in the local frame."""
+        return self.get_sensor_data(
+            self.model, self.data, "accelerometer"
+        )
+
+    def get_gyro(self, data):
+        """Return the gyroscope readings in the local frame."""
+        return self.get_sensor_data(self.model, self.data, "gyro")
+
+    def get_feet_pos(self, data):
+        """Return the position of the feet relative to the trunk."""
+        return np.vstack([
+            self.get_sensor_data(self.model, self.data, sensor_name)
+            for sensor_name in ["FL_pos", "FR_pos", "HL_pos", "HR_pos"]
+        ])
+
+    def get_sensor_data(self, model, data, sensor_name: str):
+        """Gets sensor data given sensor name."""
+        sensor_id = model.sensor(sensor_name).id
+        sensor_adr = model.sensor_adr[sensor_id]
+        sensor_dim = model.sensor_dim[sensor_id]
+        return data.sensordata[sensor_adr : sensor_adr + sensor_dim]
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale
@@ -263,5 +370,6 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     def _get_reset_info(self):
         return {
-            "x_position": self.data.qpos[0],
+            "xy_position": self.data.qpos[:2],
+            "z_position": self.data.qpos[2],
         }

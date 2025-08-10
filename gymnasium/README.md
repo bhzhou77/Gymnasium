@@ -13,6 +13,6 @@ register(
 
 2, In the folder `envs/mujoco`, created a file `spot_v0.py`.
 
-3, In the folder `envs/mujoco/assets`, added two files, `spot.xml` and `spot_scene.xml`.
+3, In the folder `envs/mujoco/assets`, added two files, `spot_v0.xml` and `spot_scene_v0.xml`.
 
 4, In the folder `envs/mujoco/assets`, added a folder `assets` that containts `.obj` files for the spot.
