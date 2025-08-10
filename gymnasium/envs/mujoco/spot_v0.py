@@ -134,13 +134,14 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         xml_file: str = "spot_scene_v0.xml",
         frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
+        keep_upright_reward_weight: float = 10.0,
         tracking_lin_vel_reward_weight: float = 1.0,
         tracking_ang_vel_reward_weight: float = 1.0,
-        upward_orientation_cost_weight: float = -100.0,
+        upward_orientation_cost_weight: float = -10.0,
         lin_vel_z_cost_weight: float = -1.0,
         ang_vel_xy_cost_weight: float = -1.0,
         ang_vel_gyro_cost_weight: float = -0.0,
-        action_cost_weight: float = -0.1,
+        action_cost_weight: float = -5.0,
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -150,6 +151,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             xml_file,
             frame_skip,
             default_camera_config,
+            keep_upright_reward_weight,
             tracking_lin_vel_reward_weight,
             tracking_ang_vel_reward_weight,
             upward_orientation_cost_weight,
@@ -162,6 +164,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             **kwargs,
         )
 
+        self._keep_upright_reward_weight = keep_upright_reward_weight
         self._tracking_lin_vel_reward_weight = tracking_lin_vel_reward_weight
         self._tracking_ang_vel_reward_weight = tracking_ang_vel_reward_weight
         self._upward_orientation_cost_weight = upward_orientation_cost_weight
@@ -243,6 +246,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         return observation, reward, False, False, info
 
     def _get_rew(self, tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action):
+        keep_upright_reward = self._reward_keep_upright(gravity_vec)
         tracking_lin_vel_reward = self._reward_tracking_lin_vel(tracking_lin_vel)
         tracking_ang_vel_reward = self._reward_tracking_ang_vel(ang_vel_gyro)
         upward_orientation_cost = self._cost_upward_orientation(gravity_vec)
@@ -251,15 +255,17 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         ang_vel_gyro_cost = self._cost_ang_vel_gyro(ang_vel_gyro)
         action_cost = self._cost_large_actions(action)
 
-        reward = tracking_lin_vel_reward \
-                 + tracking_ang_vel_reward \
-                 + upward_orientation_cost \
-                 + lin_vel_z_cost \
-                 + ang_vel_xy_cost \
-                 + ang_vel_gyro_cost \
-                 + action_cost
+        reward = keep_upright_reward \
+               + tracking_lin_vel_reward \
+               + tracking_ang_vel_reward \
+               + upward_orientation_cost \
+               + lin_vel_z_cost \
+               + ang_vel_xy_cost \
+               + ang_vel_gyro_cost \
+               + action_cost
 
         reward_info = {
+            "reward_keep_upright": keep_upright_reward,
             "reward_tracking_lin_vel": tracking_lin_vel_reward,
             "reward_tracking_ang_vel": tracking_ang_vel_reward,
             "cost_upward_orientation": upward_orientation_cost,
@@ -269,6 +275,9 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             "cost_action": action_cost,
         }
         return reward, reward_info
+
+    def _reward_keep_upright(self, gravity_vec):
+        return self._keep_upright_reward_weight * gravity_vec[2]
 
     def _reward_tracking_lin_vel(self, tracking_lin_vel):
         # movement on the plane
