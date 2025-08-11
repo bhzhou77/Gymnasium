@@ -294,8 +294,8 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
                + ang_vel_gyro_cost \
                + action_cost
 
-        # if self._cmd_step == 128:
-        #     print(reward, keep_upright_reward, tracking_lin_vel_reward, action_cost)
+        if self._cmd_step == 128:
+            print(reward, keep_upright_reward, tracking_lin_vel_reward, action_cost)
 
         reward_info = {
             "reward_keep_upright": keep_upright_reward,
