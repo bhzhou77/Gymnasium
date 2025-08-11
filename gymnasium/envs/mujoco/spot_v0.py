@@ -14,7 +14,7 @@ DEFAULT_CAMERA_CONFIG = {
 class SpotEnv(MujocoEnv, utils.EzPickle):
     r"""
     ## Description
-    This environment is based on robot dog Spot from Boston Dynamics.
+    This environment is based on robot dog Spot from Boston Dynamics with reference to the mujoco playground.
     The Spot has 16 body parts and 12 joints connecting them (excluding the body piece in the center).
     The goal is to apply angle values to the joints to make the Spot perform various gaits, such as walk, trot and gallop.
 
@@ -69,11 +69,11 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     $dx$ is the displacement of the "tip" ($x_{after-action} - x_{before-action}$),
     $dt$ is the time between actions, which depends on the `frame_skip` parameter (default is $10$),
     and `frametime` which is $0.002$ - so the default is $dt = 10 \times 0.002 = 0.02$,
-    $w_{forward}$ is the `tracking_lin_vel_reward_weight` (default is $1$).
+    $w_{forward}$ is the `reward_weight_tracking_lin_vel` (default is $1$).
     - *action_cost*:
     A negative reward to penalize the Spot for taking actions that are too large.
     $w_{control} \times \|action\|_2^2$,
-    where $w_{control}$ is `action_cost_weight` (default is $0.1$).
+    where $w_{control}$ is `cost_weight_action` (default is $0.1$).
 
     `info` contains the individual reward terms.
 
@@ -99,20 +99,21 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     ```python
     import gymnasium as gym
-    env = gym.make('Spot-v0', action_cost_weight=0.1, ....)
+    env = gym.make('Spot-v0', cost_weight_action=0.1, ....)
     ```
 
     | Parameter                                    | Type      | Default              | Description                                                                                                                                                                                         |
     | -------------------------------------------- | --------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
     | `xml_file`                                   | **str**   | `"spot_scene.xml"`   | Path to a MuJoCo model                                                                                                                                                                              |
-    | `tracking_lin_vel_reward_weight`             | **float** | `1`                  | Weight for _tracking_lin_vel_reward_ term (see `Rewards` section)                                                                                                                                   |
-    | `action_cost_weight`                         | **float** | `-0.1`               | Weight for _action_cost_ weight (see `Rewards` section)                                                                                                                                             |
+    | `reward_weight_tracking_lin_vel`             | **float** | `1`                  | Weight for _tracking_lin_vel_reward_ term (see `Rewards` section)                                                                                                                                   |
+    | `cost_weight_action`                         | **float** | `-0.1`               | Weight for _action_cost_ weight (see `Rewards` section)                                                                                                                                             |
     | `reset_noise_scale`                          | **float** | `0.1`                | Scale of random perturbations of initial position and velocity (see `Starting State` section)                                                                                                       |
     | `exclude_current_positions_from_observation` | **bool**  | `True`               | Whether or not to omit the x-coordinate from observations. Excluding the position can serve as an inductive bias to induce position-agnostic behavior in policies (see `Observation State` section) |
 
     ## Version History
     * v0:
         - Adapted from half_cheetah_v5.
+        - Referred to mujoco playground.
         - Changed the `.xml` file to the one for the spot.
         - Changed the frame_skip from 5 to 10.
         - Put minus signs the the weights for the costs.
@@ -134,14 +135,21 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         xml_file: str = "spot_scene_v0.xml",
         frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
-        keep_upright_reward_weight: float = 5.0,
-        tracking_lin_vel_reward_weight: float = 1.5,
-        tracking_ang_vel_reward_weight: float = 0.8,
-        upward_orientation_cost_weight: float = -5.0,
-        lin_vel_z_cost_weight: float = -2.0,
-        ang_vel_xy_cost_weight: float = -0.05,
-        ang_vel_gyro_cost_weight: float = -0.0,
-        action_cost_weight: float = -0.1,
+
+        reward_weight_keep_upright: float = 5.0,
+        reward_weight_tracking_lin_vel: float = 1.5,
+        reward_weight_tracking_ang_vel: float = 0.8,
+
+        cost_weight_upward_orientation: float = -5.0,
+        cost_weight_lin_vel_z: float = -2.0,
+        cost_weight_ang_vel_xy: float = -1.0,
+        cost_weight_ang_vel_gyro: float = -1.0,
+        cost_weight_action: float = -0.1,
+
+        cmd_lin_vel_x = [-1.0, 1.0],
+        cmd_lin_vel_y = [-1.0, 1.0],
+        cmd_ang_vel_z = [-1.0, 1.0], # yaw
+
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -151,27 +159,41 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             xml_file,
             frame_skip,
             default_camera_config,
-            keep_upright_reward_weight,
-            tracking_lin_vel_reward_weight,
-            tracking_ang_vel_reward_weight,
-            upward_orientation_cost_weight,
-            lin_vel_z_cost_weight,
-            ang_vel_xy_cost_weight,
-            ang_vel_gyro_cost_weight,
-            action_cost_weight,
+
+            reward_weight_keep_upright,
+            reward_weight_tracking_lin_vel,
+            reward_weight_tracking_ang_vel,
+
+            cost_weight_upward_orientation,
+            cost_weight_lin_vel_z,
+            cost_weight_ang_vel_xy,
+            cost_weight_ang_vel_gyro,
+            cost_weight_action,
+
+            cmd_lin_vel_x,
+            cmd_lin_vel_y,
+            cmd_ang_vel_z,
+
             reset_noise_scale,
             exclude_current_positions_from_observation,
             **kwargs,
         )
 
-        self._keep_upright_reward_weight = keep_upright_reward_weight
-        self._tracking_lin_vel_reward_weight = tracking_lin_vel_reward_weight
-        self._tracking_ang_vel_reward_weight = tracking_ang_vel_reward_weight
-        self._upward_orientation_cost_weight = upward_orientation_cost_weight
-        self._lin_vel_z_cost_weight = lin_vel_z_cost_weight
-        self._ang_vel_xy_cost_weight = ang_vel_xy_cost_weight
-        self._ang_vel_gyro_cost_weight = ang_vel_gyro_cost_weight
-        self._action_cost_weight = action_cost_weight
+        self._reward_weight_keep_upright = reward_weight_keep_upright
+        self._reward_weight_tracking_lin_vel = reward_weight_tracking_lin_vel
+        self._reward_weight_tracking_ang_vel = reward_weight_tracking_ang_vel
+
+        self._cost_weight_upward_orientation = cost_weight_upward_orientation
+        self._cost_weight_lin_vel_z = cost_weight_lin_vel_z
+        self._cost_weight_ang_vel_xy = cost_weight_ang_vel_xy
+        self._cost_weight_ang_vel_gyro = cost_weight_ang_vel_gyro
+        self._cost_weight_action = cost_weight_action
+
+        self._cmd_lin_vel_x = cmd_lin_vel_x
+        self._cmd_lin_vel_y = cmd_lin_vel_y
+        self._cmd_ang_vel_z = cmd_ang_vel_z
+        self._cmd_step = 0
+        self._cmd_command = self.sample_command()
 
         self._reset_noise_scale = reset_noise_scale
 
@@ -240,6 +262,14 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
                 **reward_info
         }
 
+        self._cmd_step = self._cmd_step + 1
+        self._cmd_command = np.where(self._cmd_step > 128, 
+                                     self.sample_command(),
+                                     self._cmd_command)
+        self._cmd_step = np.where(self._cmd_step > 128, 
+                                  0,
+                                  self._cmd_step)
+
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
@@ -263,7 +293,9 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
                + ang_vel_xy_cost \
                + ang_vel_gyro_cost \
                + action_cost
-        print(reward, keep_upright_reward, tracking_lin_vel_reward)
+
+        # if self._cmd_step == 128:
+        #     print(reward, keep_upright_reward, tracking_lin_vel_reward, action_cost)
 
         reward_info = {
             "reward_keep_upright": keep_upright_reward,
@@ -278,30 +310,30 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         return reward, reward_info
 
     def _reward_keep_upright(self, gravity_vec):
-        return self._keep_upright_reward_weight * gravity_vec[2]
+        return self._reward_weight_keep_upright * gravity_vec[2]
 
     def _reward_tracking_lin_vel(self, tracking_lin_vel):
         # movement on the plane
-        return self._tracking_lin_vel_reward_weight * np.linalg.norm(tracking_lin_vel)
+        return self._reward_weight_tracking_lin_vel * np.linalg.norm(tracking_lin_vel - self._cmd_command[:2])
 
     def _reward_tracking_ang_vel(self, ang_vel_gyro):
         # yaw
-        return self._tracking_ang_vel_reward_weight * np.abs(ang_vel_gyro[2])
+        return self._reward_weight_tracking_ang_vel * np.abs(ang_vel_gyro[2] - self._cmd_command[2])
 
     def _cost_upward_orientation(self, gravity_vec):
-        return self._upward_orientation_cost_weight * np.linalg.norm(gravity_vec[:2])
+        return self._cost_weight_upward_orientation * np.linalg.norm(gravity_vec[:2])
 
     def _cost_lin_vel_z(self, lin_vel_z):
-        return self._lin_vel_z_cost_weight * np.abs(lin_vel_z)
+        return self._cost_weight_lin_vel_z * np.abs(lin_vel_z)
 
     def _cost_ang_vel_xy(self, ang_vel):
-        return self._ang_vel_xy_cost_weight * np.linalg.norm(ang_vel[:2])
+        return self._cost_weight_ang_vel_xy * np.linalg.norm(ang_vel[:2])
 
     def _cost_ang_vel_gyro(self, ang_vel_gyro):
-        return self._ang_vel_gyro_cost_weight * np.linalg.norm(ang_vel_gyro[:2])
+        return self._cost_weight_ang_vel_gyro * np.linalg.norm(ang_vel_gyro[:2])
 
     def _cost_large_actions(self, action):
-        return self._action_cost_weight * np.sum(np.square(action))
+        return self._cost_weight_action * np.sum(np.square(action))
 
     def _get_obs(self):
         position = self.data.qpos.flatten()
@@ -360,6 +392,20 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         sensor_adr = model.sensor_adr[sensor_id]
         sensor_dim = model.sensor_dim[sensor_id]
         return data.sensordata[sensor_adr : sensor_adr + sensor_dim]
+
+    def sample_command(self):
+        """Samples a random command with a 10% chance of being zero."""
+        lin_vel_x = np.random.uniform(
+            low=self._cmd_lin_vel_x[0], high=self._cmd_lin_vel_x[1]
+        )
+        lin_vel_y = np.random.uniform(
+            low=self._cmd_lin_vel_y[0], high=self._cmd_lin_vel_y[1]
+        )
+        ang_vel_yaw = np.random.uniform(
+            low=self._cmd_ang_vel_z[0], high=self._cmd_ang_vel_z[1],
+        )
+        cmd = np.hstack([lin_vel_x, lin_vel_y, ang_vel_yaw])
+        return np.where(np.random.binomial(1, 0.1), np.zeros(3), cmd)
 
     def reset_model(self):
         noise_low = -self._reset_noise_scale
