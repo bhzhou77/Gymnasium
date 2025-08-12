@@ -150,6 +150,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         cmd_lin_vel_y = [-1.0, 1.0],
         cmd_ang_vel_z = [-1.0, 1.0], # yaw
 
+        tracking_sigma = 0.25
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -174,6 +175,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             cmd_lin_vel_y,
             cmd_ang_vel_z,
 
+            tracking_sigma,
             reset_noise_scale,
             exclude_current_positions_from_observation,
             **kwargs,
@@ -195,6 +197,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         self._cmd_step = 0
         self._cmd_command = self.sample_command()
 
+        self._tracking_sigma = tracking_sigma
         self._reset_noise_scale = reset_noise_scale
 
         self._exclude_current_positions_from_observation = (
@@ -314,11 +317,13 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
     def _reward_tracking_lin_vel(self, tracking_lin_vel):
         # movement on the plane
-        return self._reward_weight_tracking_lin_vel * np.linalg.norm(tracking_lin_vel - self._cmd_command[:2])
+        lin_vel_err = np.sum(np.square(tracking_lin_vel - self._cmd_command[:2]))
+        return self._reward_weight_tracking_lin_vel * np.exp(-lin_vel_err/self._tracking_sigma)
 
     def _reward_tracking_ang_vel(self, ang_vel_gyro):
         # yaw
-        return self._reward_weight_tracking_ang_vel * np.abs(ang_vel_gyro[2] - self._cmd_command[2])
+        ang_vel_err = np.sum(np.square(ang_vel_gyro[2] - self._cmd_command[2]))
+        return self._reward_weight_tracking_ang_vel * np.exp(-ang_vel_err/self._tracking_sigma)
 
     def _cost_upward_orientation(self, gravity_vec):
         return self._cost_weight_upward_orientation * np.linalg.norm(gravity_vec[:2])
