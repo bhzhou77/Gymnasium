@@ -144,7 +144,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         cost_weight_lin_vel_z: float = -2.0,
         cost_weight_ang_vel_xy: float = -1.0,
         cost_weight_ang_vel_gyro: float = -1.0,
-        cost_weight_action: float = -0.1,
+        cost_weight_action: float = -1.0,
 
         cmd_lin_vel_x = [-1.0, 1.0],
         cmd_lin_vel_y = [-1.0, 1.0],
