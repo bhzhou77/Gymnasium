@@ -137,20 +137,24 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
 
         reward_weight_keep_upright: float = 5.0,
-        reward_weight_tracking_lin_vel: float = 1.5,
-        reward_weight_tracking_ang_vel: float = 0.8,
+        reward_weight_tracking_lin_vel: float = 1.0,
+        reward_weight_tracking_ang_vel: float = 0.5,
+        reward_weight_smooth_movement: float = 5.0,
 
-        cost_weight_upward_orientation: float = -5.0,
-        cost_weight_lin_vel_z: float = -2.0,
-        cost_weight_ang_vel_xy: float = -1.0,
-        cost_weight_ang_vel_gyro: float = -1.0,
-        cost_weight_action: float = -1.0,
+        cost_weight_upward_orientation: float = -0.0,
+        cost_weight_lin_vel_z: float = -0.5,
+        cost_weight_ang_vel_xy: float = -0.2,
+        cost_weight_ang_vel_gyro: float = -0.2,
+        cost_weight_action: float = -0.1,
+        cost_weight_ang_accel: float = -0.00001,
 
-        cmd_lin_vel_x = [-1.0, 1.0],
-        cmd_lin_vel_y = [-1.0, 1.0],
+        cmd_lin_vel_x = [-2.0, 2.0],
+        cmd_lin_vel_y = [-2.0, 2.0],
         cmd_ang_vel_z = [-1.0, 1.0], # yaw
 
+        upright_sigma = 0.1,
         tracking_sigma = 0.25,
+        smooth_sigma = 0.1,
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
@@ -164,18 +168,22 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
             reward_weight_keep_upright,
             reward_weight_tracking_lin_vel,
             reward_weight_tracking_ang_vel,
+            reward_weight_smooth_movement,
 
             cost_weight_upward_orientation,
             cost_weight_lin_vel_z,
             cost_weight_ang_vel_xy,
             cost_weight_ang_vel_gyro,
             cost_weight_action,
+            cost_weight_ang_accel,
 
             cmd_lin_vel_x,
             cmd_lin_vel_y,
             cmd_ang_vel_z,
 
+            upright_sigma,
             tracking_sigma,
+            smooth_sigma,
             reset_noise_scale,
             exclude_current_positions_from_observation,
             **kwargs,
@@ -184,12 +192,14 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         self._reward_weight_keep_upright = reward_weight_keep_upright
         self._reward_weight_tracking_lin_vel = reward_weight_tracking_lin_vel
         self._reward_weight_tracking_ang_vel = reward_weight_tracking_ang_vel
+        self._reward_weight_smooth_movement = reward_weight_smooth_movement
 
         self._cost_weight_upward_orientation = cost_weight_upward_orientation
         self._cost_weight_lin_vel_z = cost_weight_lin_vel_z
         self._cost_weight_ang_vel_xy = cost_weight_ang_vel_xy
         self._cost_weight_ang_vel_gyro = cost_weight_ang_vel_gyro
         self._cost_weight_action = cost_weight_action
+        self._cost_weight_ang_accel = cost_weight_ang_accel
 
         self._cmd_lin_vel_x = cmd_lin_vel_x
         self._cmd_lin_vel_y = cmd_lin_vel_y
@@ -197,7 +207,9 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         self._cmd_step = 0
         self._cmd_command = self.sample_command()
 
+        self._upright_sigma = upright_sigma
         self._tracking_sigma = tracking_sigma
+        self._smooth_sigma = smooth_sigma
         self._reset_noise_scale = reset_noise_scale
 
         self._exclude_current_positions_from_observation = (
@@ -242,19 +254,23 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
     def step(self, action):
         xy_position_before = self.data.qpos[:2].copy()
         z_position_before = self.data.qpos[2].copy()
+        ang_vel_before = self.data.qvel[7:].copy()
+        ang_pos_before = self.data.qpos[7:].copy()
         self.do_simulation(action, self.frame_skip)
         xy_position_after = self.data.qpos[:2].copy()
         z_position_after = self.data.qpos[2].copy()
+        ang_vel_after = self.data.qvel[7:].copy()
 
         tracking_lin_vel = (xy_position_after - xy_position_before) / self.dt
         lin_vel_z = (z_position_after - z_position_before) / self.dt
+        ang_accel = (ang_vel_after - ang_vel_before) / self.dt
 
         ang_vel = self.get_global_angvel(self.data)
         ang_vel_gyro = self.get_gyro(self.data)
         gravity_vec = self.get_gravity(self.data)
 
         observation = self._get_obs()
-        reward, reward_info = self._get_rew(tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action)
+        reward, reward_info = self._get_rew(tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action, ang_pos_before, ang_accel)
         info = {"xy_position": xy_position_after, 
                 "z_position": z_position_after, 
                 "tracking_lin_vel": tracking_lin_vel,
@@ -278,42 +294,59 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         return observation, reward, False, False, info
 
-    def _get_rew(self, tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action):
+    def _get_rew(self, tracking_lin_vel, gravity_vec, lin_vel_z, ang_vel, ang_vel_gyro, action, ang_pos_before, ang_accel):
         keep_upright_reward = self._reward_keep_upright(gravity_vec)
         tracking_lin_vel_reward = self._reward_tracking_lin_vel(tracking_lin_vel)
         tracking_ang_vel_reward = self._reward_tracking_ang_vel(ang_vel_gyro)
+        smooth_movement_reward = self._reward_smooth_movement(ang_pos_before, action)
         upward_orientation_cost = self._cost_upward_orientation(gravity_vec)
         lin_vel_z_cost = self._cost_lin_vel_z(lin_vel_z)
         ang_vel_xy_cost = self._cost_ang_vel_xy(ang_vel)
         ang_vel_gyro_cost = self._cost_ang_vel_gyro(ang_vel_gyro)
         action_cost = self._cost_large_actions(action)
+        ang_accel_cost = self._cost_large_ang_accel(ang_accel)
 
         reward = keep_upright_reward \
                + tracking_lin_vel_reward \
                + tracking_ang_vel_reward \
+               + smooth_movement_reward \
                + upward_orientation_cost \
                + lin_vel_z_cost \
                + ang_vel_xy_cost \
                + ang_vel_gyro_cost \
-               + action_cost
+               + action_cost \
+               + ang_accel_cost
 
         if self._cmd_step == 128:
-            print(reward, keep_upright_reward, tracking_lin_vel_reward, action_cost)
+            print(reward, 
+                            keep_upright_reward,
+                            tracking_lin_vel_reward,
+                            tracking_ang_vel_reward,
+                            smooth_movement_reward,
+                            upward_orientation_cost,
+                            lin_vel_z_cost,
+                            ang_vel_xy_cost,
+                            ang_vel_gyro_cost,
+                            action_cost, 
+                            ang_accel_cost)
 
         reward_info = {
             "reward_keep_upright": keep_upright_reward,
             "reward_tracking_lin_vel": tracking_lin_vel_reward,
             "reward_tracking_ang_vel": tracking_ang_vel_reward,
+            "reward_smooth_movement": smooth_movement_reward,
             "cost_upward_orientation": upward_orientation_cost,
             "cost_lin_vel_z": lin_vel_z_cost,
             "cost_ang_vel_xy": ang_vel_xy_cost,
             "cost_ang_vel_gyro": ang_vel_gyro_cost,
             "cost_action": action_cost,
+            "cost_ang_accel": ang_accel_cost
         }
         return reward, reward_info
 
     def _reward_keep_upright(self, gravity_vec):
-        return self._reward_weight_keep_upright * gravity_vec[2]
+        gravity_err = np.square(gravity_vec[2] - 1)
+        return self._reward_weight_keep_upright * np.exp(-gravity_err/self._upright_sigma)
 
     def _reward_tracking_lin_vel(self, tracking_lin_vel):
         # movement on the plane
@@ -325,20 +358,28 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         ang_vel_err = np.sum(np.square(ang_vel_gyro[2] - self._cmd_command[2]))
         return self._reward_weight_tracking_ang_vel * np.exp(-ang_vel_err/self._tracking_sigma)
 
+    def _reward_smooth_movement(self, ang_pos_before, action):
+        ang_pos_act_err = np.sum(np.square(ang_pos_before - action))
+        return self._reward_weight_smooth_movement * np.exp(-ang_pos_act_err/self._smooth_sigma)
+
     def _cost_upward_orientation(self, gravity_vec):
-        return self._cost_weight_upward_orientation * np.linalg.norm(gravity_vec[:2])
+        upward_err = np.sum(np.square(gravity_vec[:2]))
+        return self._cost_weight_upward_orientation * np.exp(-upward_err/self._upright_sigma)
 
     def _cost_lin_vel_z(self, lin_vel_z):
-        return self._cost_weight_lin_vel_z * np.abs(lin_vel_z)
+        return self._cost_weight_lin_vel_z * np.square(lin_vel_z)
 
     def _cost_ang_vel_xy(self, ang_vel):
-        return self._cost_weight_ang_vel_xy * np.linalg.norm(ang_vel[:2])
+        return self._cost_weight_ang_vel_xy * np.sum(np.square(ang_vel[:2]))
 
     def _cost_ang_vel_gyro(self, ang_vel_gyro):
-        return self._cost_weight_ang_vel_gyro * np.linalg.norm(ang_vel_gyro[:2])
+        return self._cost_weight_ang_vel_gyro * np.sum(np.square(ang_vel_gyro[:2]))
 
     def _cost_large_actions(self, action):
         return self._cost_weight_action * np.sum(np.square(action))
+
+    def _cost_large_ang_accel(self, ang_accel):
+        return self._cost_weight_ang_accel * np.sum(np.square(ang_accel))
 
     def _get_obs(self):
         position = self.data.qpos.flatten()
