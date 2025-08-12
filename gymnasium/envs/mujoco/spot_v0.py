@@ -150,7 +150,7 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         cmd_lin_vel_y = [-1.0, 1.0],
         cmd_ang_vel_z = [-1.0, 1.0], # yaw
 
-        tracking_sigma = 0.25
+        tracking_sigma = 0.25,
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         **kwargs,
