@@ -136,17 +136,17 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
         frame_skip: int = 10,
         default_camera_config: dict[str, float | int] = DEFAULT_CAMERA_CONFIG,
 
-        reward_weight_keep_upright: float = 5.0,
-        reward_weight_tracking_lin_vel: float = 1.0,
-        reward_weight_tracking_ang_vel: float = 0.5,
-        reward_weight_smooth_movement: float = 5.0,
+        reward_weight_keep_upright: float = 2.0,
+        reward_weight_tracking_lin_vel: float = 2.0,
+        reward_weight_tracking_ang_vel: float = 1.0,
+        reward_weight_smooth_movement: float = 1.0,
 
         cost_weight_upward_orientation: float = -0.0,
-        cost_weight_lin_vel_z: float = -0.5,
-        cost_weight_ang_vel_xy: float = -0.2,
-        cost_weight_ang_vel_gyro: float = -0.2,
+        cost_weight_lin_vel_z: float = -0.3,
+        cost_weight_ang_vel_xy: float = -0.1,
+        cost_weight_ang_vel_gyro: float = -0.0,
         cost_weight_action: float = -0.1,
-        cost_weight_ang_accel: float = -0.00001,
+        cost_weight_ang_accel: float = -0.0,
 
         cmd_lin_vel_x = [-2.0, 2.0],
         cmd_lin_vel_y = [-2.0, 2.0],
@@ -319,16 +319,16 @@ class SpotEnv(MujocoEnv, utils.EzPickle):
 
         if self._cmd_step == 128:
             print(reward, 
-                            keep_upright_reward,
-                            tracking_lin_vel_reward,
-                            tracking_ang_vel_reward,
-                            smooth_movement_reward,
-                            upward_orientation_cost,
-                            lin_vel_z_cost,
-                            ang_vel_xy_cost,
-                            ang_vel_gyro_cost,
-                            action_cost, 
-                            ang_accel_cost)
+                  keep_upright_reward,
+                  tracking_lin_vel_reward,
+                  tracking_ang_vel_reward,
+                  smooth_movement_reward,
+                  upward_orientation_cost,
+                  lin_vel_z_cost,
+                  ang_vel_xy_cost,
+                  ang_vel_gyro_cost,
+                  action_cost, 
+                  ang_accel_cost)
 
         reward_info = {
             "reward_keep_upright": keep_upright_reward,
